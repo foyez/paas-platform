@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "k8s/**"
+      - ".github/workflows/k8s-pipeline.yaml"
   pull_request:
     branches: [main]
     paths:
