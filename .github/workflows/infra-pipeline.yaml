@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "terraform/**" # only trigger when terraform/ changes
+      - "terraform/**"         # only trigger when terraform/ changes
       - ".github/workflows/infra-pipeline.yaml"
   pull_request:
     branches: [main]
@@ -17,22 +17,24 @@ env:
   TF_WORKING_DIR: "./terraform"
 
 jobs:
-  # == Job 1: Plan (runs on every PR and push) ==
+  # ── Job 1: Plan (runs on every PR and push) ────────────────────────────────
   plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write # needed to post plan as PR comment
+      pull-requests: write      # needed to post plan as PR comment
+
     outputs:
       plan_exit_code: ${{ steps.plan.outputs.exit_code }}
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
@@ -48,6 +50,8 @@ jobs:
       - name: Terraform Format Check
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform fmt -check -recursive
+        # Fails the pipeline if any .tf file is not properly formatted.
+        # Run 'terraform fmt' locally before pushing to fix.
 
       - name: Terraform Validate
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -58,10 +62,9 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         # Exit code: 0 = no changes, 1 = error, 2 = changes present
         run: |
-          terraform plan -detailed-exitcode -no-color -out=tfplan > plan-output.txt 2>&1 || TF_EXIT=$?
-          TF_EXIT=${TF_EXIT:-0}
-          cat plan-output.txt
-          echo "exit_code=$TF_EXIT" >> $GITHUB_OUTPUT
+          terraform plan -detailed-exitcode -no-color -out=tfplan \
+            2>&1 | tee plan-output.txt
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
         continue-on-error: true   # exit code 2 is not an error
 
       - name: Fail on plan error
@@ -116,7 +119,7 @@ jobs:
           path: ${{ env.TF_WORKING_DIR }}/tfplan
           retention-days: 1
 
-  # == Job 2: Apply (only on main, requires manual approval)
+  # ── Job 2: Apply (only on main, requires manual approval) ─────────────────
   apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
@@ -137,7 +140,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
