@@ -1,0 +1,66 @@
+name: Destroy Kubernetes Resources
+
+# Manual trigger only - prevents accidental destruction
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy" to confirm k8s resource destruction'
+        required: true
+        type: string
+
+env:
+  AWS_REGION: "eu-central-1"
+  CLUSTER_NAME: "paas-cluster"
+
+jobs:
+  destroy:
+    name: kubectl delete
+    runs-on: ubuntu-latest
+    # Double safety: input confirmation + environment approval
+    if: github.event.inputs.confirm == 'destroy'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ env.AWS_REGION }} \
+            --name ${{ env.CLUSTER_NAME }}
+
+      # Order matters: delete resources before namespaces/operators
+
+      - name: Delete CNPG clusters (databases)
+        run: |
+          echo "Deleting CNPG clusters..."
+          kubectl delete -f k8s/cnpg/ --recursive --ignore-not-found
+          # Wait for pods to terminate
+          kubectl wait --for=delete pods -l cnpg.io/cluster -n paas-databases --timeout=120s || true
+
+      - name: Delete CloudNativePG operator
+        run: |
+          echo "Deleting CNPG operator..."
+          kubectl delete -f \
+            https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.0.yaml \
+            --ignore-not-found
+
+      - name: Delete namespaces and storage class
+        run: |
+          echo "Deleting namespaces and storage class..."
+          kubectl delete -f k8s/storage-class.yaml --ignore-not-found
+          kubectl delete -f k8s/namespaces.yaml --ignore-not-found
+
+      - name: Verify cleanup
+        run: |
+          echo "Remaining resources:"
+          kubectl get all -n paas-databases 2>/dev/null || echo "Namespace paas-databases deleted"
+          kubectl get all -n cnpg-system 2>/dev/null || echo "Namespace cnpg-system deleted"
