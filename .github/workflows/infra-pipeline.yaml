@@ -42,6 +42,8 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          # Disable wrapper to preserve terraform's exit codes (0=no changes, 1=error, 2=changes)
+          # The wrapper resets exit codes to 0, breaking our apply job condition
           terraform_wrapper: false
 
       - name: Terraform Init
@@ -153,7 +155,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
+          terraform_wrapper: false  # Must match plan job setting
 
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
