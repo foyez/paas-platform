@@ -60,7 +60,9 @@ jobs:
         run: |
           terraform plan -detailed-exitcode -no-color -out=tfplan \
             2>&1 | tee plan-output.txt
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
+          TF_EXIT=${PIPESTATUS[0]}
+          echo "exit_code=$TF_EXIT" >> $GITHUB_OUTPUT
+          exit $TF_EXIT
         continue-on-error: true   # exit code 2 is not an error
 
       - name: Fail on plan error
