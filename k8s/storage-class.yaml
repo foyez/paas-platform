@@ -1,0 +1,18 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    # Make gp3 the default StorageClass - PVCs without a class use this
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  fsType: ext4
+  # gp3 baseline performance (upgradeable without reprovisioning):
+  iops: "3000"
+  throughput: "125"   # MB/s
+reclaimPolicy: Delete  # delete EBS volume when PVC is deleted
+volumeBindingMode: WaitForFirstConsumer
+# WaitForFirstConsumer: only create the EBS volume when a pod is scheduled
+# This ensures the EBS volume is in the same AZ as the pod

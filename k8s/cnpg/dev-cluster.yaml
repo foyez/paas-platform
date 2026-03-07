@@ -1,0 +1,29 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: dev-db
+  namespace: paas-databases
+spec:
+  instances: 1 # single instance for dev
+
+  imageName: ghcr.io/cloudnative-pg/postgresql:15.6
+
+  storage:
+    size: 1Gi
+    storageClass: gp3
+
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+      secret:
+        name: dev-db-app-secret
+
+  # Resource limits — important on t3.medium nodes
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
