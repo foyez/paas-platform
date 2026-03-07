@@ -28,7 +28,7 @@ variable "node_instance_type" {
   description = "EC2 instance type for worker nodes"
   type        = string
   # default     = "t3.medium" # 2 vCPU, 4GB RAM - minimum for CNPG + your API
-  default     = "t3.small" # 2 vCPU, 2GB RAM - cost-effective for dev
+  default = "t3.small" # 2 vCPU, 2GB RAM - cost-effective for dev
 }
 
 variable "node_desired_size" {
