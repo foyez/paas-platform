@@ -21,7 +21,6 @@ jobs:
   plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
-    environment: production
     permissions:
       contents: read
       pull-requests: write # needed to post plan as PR comment
