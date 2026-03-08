@@ -37,7 +37,26 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --name ${{ env.CLUSTER_NAME }}
 
-      # Order matters: delete resources before namespaces/operators
+      # Step 1: Delete ArgoCD apps first (prevents self-healing)
+      - name: Delete ArgoCD Applications
+        run: |
+          echo "Deleting ArgoCD root app (cascades to all child apps)..."
+          kubectl delete application root -n argocd --ignore-not-found
+          
+          # Wait for child apps to be deleted
+          echo "Waiting for ArgoCD apps to be deleted..."
+          for i in $(seq 1 30); do
+            APPS=$(kubectl get applications -n argocd --no-headers 2>/dev/null | wc -l)
+            if [ "$APPS" -eq 0 ]; then
+              echo "✓ All ArgoCD apps deleted"
+              break
+            fi
+            echo "  Waiting... ($APPS apps remaining)"
+            [ $i -eq 30 ] && echo "⚠ Timeout waiting for apps to delete"
+            sleep 5
+          done
+
+      # Step 2: Delete resources (order matters)
 
       - name: Delete CNPG clusters (databases)
         run: |
@@ -49,18 +68,21 @@ jobs:
       - name: Delete CloudNativePG operator
         run: |
           echo "Deleting CNPG operator..."
-          kubectl delete -f \
-            https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.0.yaml \
-            --ignore-not-found
+          kubectl delete -f k8s/cnpg-operator/ --recursive --ignore-not-found
 
-      - name: Delete namespaces and storage class
+      - name: Delete base infrastructure
         run: |
           echo "Deleting namespaces and storage class..."
-          kubectl delete -f k8s/storage-class.yaml --ignore-not-found
-          kubectl delete -f k8s/namespaces.yaml --ignore-not-found
+          kubectl delete -f k8s/base-infra/ --recursive --ignore-not-found
+
+      - name: Delete ArgoCD (optional - remove if you want to keep ArgoCD)
+        run: |
+          echo "Deleting ArgoCD..."
+          kubectl delete namespace argocd --ignore-not-found
 
       - name: Verify cleanup
         run: |
           echo "Remaining resources:"
-          kubectl get all -n paas-databases 2>/dev/null || echo "Namespace paas-databases deleted"
-          kubectl get all -n cnpg-system 2>/dev/null || echo "Namespace cnpg-system deleted"
+          kubectl get all -n paas-databases 2>/dev/null || echo "✓ Namespace paas-databases deleted"
+          kubectl get all -n cnpg-system 2>/dev/null || echo "✓ Namespace cnpg-system deleted"
+          kubectl get all -n argocd 2>/dev/null || echo "✓ Namespace argocd deleted"
