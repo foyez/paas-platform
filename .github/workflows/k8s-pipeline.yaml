@@ -1,6 +1,7 @@
 name: Kubernetes Manifests Pipeline
 
 on:
+  workflow_dispatch: # allows manual run from GitHub UI
   push:
     paths:
       - "k8s/**"
