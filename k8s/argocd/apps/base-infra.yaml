@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: base-infra
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1" # sync first
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/foyez/paas-platform
+    targetRevision: HEAD
+    path: k8s/base-infra
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default # namespaces are cluster-scoped anyway
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

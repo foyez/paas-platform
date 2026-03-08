@@ -3,30 +3,33 @@ kind: Application
 metadata:
   name: cnpg-clusters
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"  # sync after operator is ready
 spec:
   project: default
-
   source:
     repoURL: https://github.com/foyez/paas-platform
     targetRevision: HEAD
     path: k8s/cnpg              # directory containing Cluster CRs (dev-db, ha-db)
-
   destination:
     server: https://kubernetes.default.svc
     namespace: paas-databases   # where the database clusters live
-
   syncPolicy:
     automated:
       prune: true      # delete resources that are removed from Git
       selfHeal: true   # revert manual kubectl changes to match Git
-
     syncOptions:
     - CreateNamespace=true   # create paas-databases namespace if it doesn't exist
     - ServerSideApply=true   # use server-side apply (handles large manifests)
-
     retry:
       limit: 3              # retry failed syncs up to 3 times
       backoff:
         duration: 10s
         factor: 2
         maxDuration: 2m
+  # Tell ArgoCD not to treat CNPG-managed status fields as drift
+  ignoreDifferences:
+  - group: postgresql.cnpg.io
+    kind: Cluster
+    jsonPointers:
+    - /status

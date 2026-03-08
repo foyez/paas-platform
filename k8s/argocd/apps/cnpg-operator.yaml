@@ -3,17 +3,21 @@ kind: Application
 metadata:
   name: cnpg-operator
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"  # sync after base-infra
 spec:
   project: default
-
   source:
     repoURL: https://github.com/foyez/paas-platform
     targetRevision: HEAD
     path: k8s/cnpg-operator
-
   destination:
     server: https://kubernetes.default.svc
     namespace: cnpg-system
-
-  # No syncPolicy = manual sync only
-  # ArgoCD will detect drift but NOT apply it automatically
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
