@@ -1,7 +1,6 @@
 name: Kubernetes Manifests Pipeline
 
 on:
-  workflow_dispatch: # allows manual run from GitHub UI
   push:
     paths:
       - "k8s/**"
@@ -37,115 +36,115 @@ jobs:
             -exec kubeconform -strict -summary {} \;
 
   # == Job 2: Diff on PR (dry-run, shows what would change) ==
-  diff:
-    name: kubectl diff
-    runs-on: ubuntu-latest
-    needs: validate
-    if: github.event_name == 'pull_request'
+  # diff:
+  #   name: kubectl diff
+  #   runs-on: ubuntu-latest
+  #   needs: validate
+  #   if: github.event_name == 'pull_request'
 
-    steps:
-      - uses: actions/checkout@v4
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+  #     - name: Configure AWS credentials
+  #       uses: aws-actions/configure-aws-credentials@v4
+  #       with:
+  #         aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #         aws-region: ${{ env.AWS_REGION }}
 
-      - name: Configure kubectl
-        run: |
-          aws eks update-kubeconfig \
-            --region ${{ env.AWS_REGION }} \
-            --name ${{ env.CLUSTER_NAME }}
+  #     - name: Configure kubectl
+  #       run: |
+  #         aws eks update-kubeconfig \
+  #           --region ${{ env.AWS_REGION }} \
+  #           --name ${{ env.CLUSTER_NAME }}
 
-      - name: kubectl diff (show pending changes)
-        run: |
-          # Shows what would change — output appears in PR checks
-          # Exit code 1 = differences exist (not an error) → || true
-          kubectl diff -f k8s/ --recursive || true
+  #     - name: kubectl diff (show pending changes)
+  #       run: |
+  #         # Shows what would change — output appears in PR checks
+  #         # Exit code 1 = differences exist (not an error) → || true
+  #         kubectl diff -f k8s/ --recursive || true
 
-  # == Job 3: Apply on merge to main ==
-  apply:
-    name: kubectl apply
-    runs-on: ubuntu-latest
-    needs: validate
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  # # == Job 3: Apply on merge to main ==
+  # apply:
+  #   name: kubectl apply
+  #   runs-on: ubuntu-latest
+  #   needs: validate
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
-    steps:
-      - uses: actions/checkout@v4
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+  #     - name: Configure AWS credentials
+  #       uses: aws-actions/configure-aws-credentials@v4
+  #       with:
+  #         aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #         aws-region: ${{ env.AWS_REGION }}
 
-      - name: Configure kubectl
-        run: |
-          aws eks update-kubeconfig \
-            --region ${{ env.AWS_REGION }} \
-            --name ${{ env.CLUSTER_NAME }}
+  #     - name: Configure kubectl
+  #       run: |
+  #         aws eks update-kubeconfig \
+  #           --region ${{ env.AWS_REGION }} \
+  #           --name ${{ env.CLUSTER_NAME }}
 
-      # Order matters: namespaces must exist before resources inside them
-      - name: Apply cluster-level resources
-        run: |
-          kubectl apply -f k8s/namespaces.yaml
-          kubectl apply -f k8s/storage-class.yaml
+  #     # Order matters: namespaces must exist before resources inside them
+  #     - name: Apply cluster-level resources
+  #       run: |
+  #         kubectl apply -f k8s/namespaces.yaml
+  #         kubectl apply -f k8s/storage-class.yaml
 
-      - name: Deploy CloudNativePG operator
-        run: |
-          kubectl apply --server-side -f \
-            https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.0.yaml
+  #     - name: Deploy CloudNativePG operator
+  #       run: |
+  #         kubectl apply --server-side -f \
+  #           https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.0.yaml
 
-          # Wait for the operator before applying Cluster CRs
-          # (CRDs must be registered before you can create CRs)
-          kubectl rollout status deployment/cnpg-controller-manager \
-            -n cnpg-system --timeout=120s
+  #         # Wait for the operator before applying Cluster CRs
+  #         # (CRDs must be registered before you can create CRs)
+  #         kubectl rollout status deployment/cnpg-controller-manager \
+  #           -n cnpg-system --timeout=120s
 
-      - name: Apply CNPG clusters
-        run: kubectl apply -f k8s/cnpg/ --recursive
+  #     - name: Apply CNPG clusters
+  #       run: kubectl apply -f k8s/cnpg/ --recursive
 
-      - name: Wait for clusters healthy
-        run: |
-          for cluster in dev-db ha-db; do
-            echo "Waiting for $cluster..."
-            for i in $(seq 1 18); do
-              STATUS=$(kubectl get cluster $cluster -n paas-databases \
-                -o jsonpath='{.status.phase}' 2>/dev/null || echo "NotFound")
-              if [ "$STATUS" = "Cluster in healthy state" ]; then
-                echo "✓ $cluster is healthy"
-                break
-              fi
-              [ $i -eq 18 ] && echo "✗ $cluster not healthy after 3 min" && exit 1
-              sleep 10
-            done
-          done
+  #     - name: Wait for clusters healthy
+  #       run: |
+  #         for cluster in dev-db ha-db; do
+  #           echo "Waiting for $cluster..."
+  #           for i in $(seq 1 18); do
+  #             STATUS=$(kubectl get cluster $cluster -n paas-databases \
+  #               -o jsonpath='{.status.phase}' 2>/dev/null || echo "NotFound")
+  #             if [ "$STATUS" = "Cluster in healthy state" ]; then
+  #               echo "✓ $cluster is healthy"
+  #               break
+  #             fi
+  #             [ $i -eq 18 ] && echo "✗ $cluster not healthy after 3 min" && exit 1
+  #             sleep 10
+  #           done
+  #         done
 
-      - name: Print useful commands
-        run: |
-          echo "=========================================="
-          echo "Useful commands to check deployment:"
-          echo "=========================================="
-          echo ""
-          echo "# Configure kubectl locally:"
-          echo "aws eks update-kubeconfig \\"
-          echo "  --region ${{ env.AWS_REGION }} \\"
-          echo "  --name ${{ env.CLUSTER_NAME }}"
-          echo ""
-          echo "# Check CNPG clusters:"
-          echo "kubectl get cluster -n paas-databases"
-          echo "kubectl get cluster dev-db -n paas-databases"
-          echo "kubectl get cluster ha-db -n paas-databases"
-          echo ""
-          echo "# Check all resources in namespace:"
-          echo "kubectl get all -n paas-databases"
-          echo ""
-          echo "# Check pods and logs:"
-          echo "kubectl get pods -n paas-databases"
-          echo "kubectl logs -n paas-databases -l cnpg.io/cluster=dev-db"
-          echo ""
-          echo "# Connect to database:"
-          echo "kubectl exec -it dev-db-1 -n paas-databases -- psql -U app"
-          echo "=========================================="
+  #     - name: Print useful commands
+  #       run: |
+  #         echo "=========================================="
+  #         echo "Useful commands to check deployment:"
+  #         echo "=========================================="
+  #         echo ""
+  #         echo "# Configure kubectl locally:"
+  #         echo "aws eks update-kubeconfig \\"
+  #         echo "  --region ${{ env.AWS_REGION }} \\"
+  #         echo "  --name ${{ env.CLUSTER_NAME }}"
+  #         echo ""
+  #         echo "# Check CNPG clusters:"
+  #         echo "kubectl get cluster -n paas-databases"
+  #         echo "kubectl get cluster dev-db -n paas-databases"
+  #         echo "kubectl get cluster ha-db -n paas-databases"
+  #         echo ""
+  #         echo "# Check all resources in namespace:"
+  #         echo "kubectl get all -n paas-databases"
+  #         echo ""
+  #         echo "# Check pods and logs:"
+  #         echo "kubectl get pods -n paas-databases"
+  #         echo "kubectl logs -n paas-databases -l cnpg.io/cluster=dev-db"
+  #         echo ""
+  #         echo "# Connect to database:"
+  #         echo "kubectl exec -it dev-db-1 -n paas-databases -- psql -U app"
+  #         echo "=========================================="
